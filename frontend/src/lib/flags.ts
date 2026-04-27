@@ -18,6 +18,7 @@ export const HARD_FILTER_FLAGS: ReadonlySet<FlagName> = new Set([
   "lens_cracked",
   "housing_cracked",
   "complete_assembly",
+  "oem",
 ]);
 
 // User-facing label + a help string explaining what TRUE means.

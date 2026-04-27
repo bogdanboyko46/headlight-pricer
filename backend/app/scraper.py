@@ -58,6 +58,7 @@ class SearchResult:
 class ListingDetail:
     item_specifics: dict[str, str] = field(default_factory=dict)
     description: str = ""
+    condition_tag: Optional[str] = None  # from .x-item-condition-text on detail page
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +224,7 @@ async def _fetch_search_page(
                 image_url=r.get("imgSrc") or None,
                 price=price,
                 shipping=shipping,
-                condition_tag=r.get("conditionTag"),
+                condition_tag=_plausible_condition_tag(r.get("conditionTag")),
                 listing_type=ltype,
                 is_sold=sold,
                 sold_date=sold_date if sold else None,
@@ -247,9 +248,40 @@ _DETAIL_PARSE_JS = r"""
     const v = dd.innerText.trim().replace(/\s+/g, ' ').slice(0, 400);
     if (k && v && !specs[k]) specs[k] = v;
   }
-  return { specs };
+  // Authoritative condition string lives in .x-item-condition-text on the
+  // detail page; the visible label is duplicated for screen-readers, so the
+  // first non-empty line is the one to keep.
+  let conditionTag = null;
+  const condEl = document.querySelector('.x-item-condition-text, [data-testid="x-item-condition-text"]');
+  if (condEl) {
+    const lines = condEl.innerText.split('\n').map(s => s.trim()).filter(Boolean);
+    if (lines.length) conditionTag = lines[0];
+  }
+  return { specs, conditionTag };
 }
 """
+
+# A "condition tag" extracted from search-results is only trustworthy if it
+# actually looks like a condition word. eBay's .s-card__subtitle slot is also
+# (mis)used by sellers for promo lines — stars, checkmarks, "compatible w/...".
+# We keep the search-page hint only when it matches a short, clean phrase.
+_PLAUSIBLE_CONDITION_RE = re.compile(
+    r"^(?:brand new|new(?:\s*\([^)]+\))?|new with(?:out)? .{0,20}|"
+    r"pre-owned|used|open box|seller refurbished|certified -? refurbished|"
+    r"manufacturer refurbished|for parts or not working|parts only)$",
+    re.IGNORECASE,
+)
+
+
+def _plausible_condition_tag(s: str | None) -> Optional[str]:
+    if not s:
+        return None
+    cleaned = " ".join(s.split())
+    if not cleaned or len(cleaned) > 60:
+        return None
+    if _PLAUSIBLE_CONDITION_RE.match(cleaned):
+        return cleaned
+    return None
 
 
 async def _fetch_detail(
@@ -267,8 +299,10 @@ async def _fetch_detail(
         try:
             data = await page.evaluate(_DETAIL_PARSE_JS)
             detail.item_specifics = data.get("specs", {}) or {}
+            detail.condition_tag = data.get("conditionTag") or None
         except Exception:
             detail.item_specifics = {}
+            detail.condition_tag = None
     finally:
         await page.close()
 
@@ -359,10 +393,15 @@ async def scrape_query(query: str) -> list[dict[str, Any]]:
         total = None
         if r.price is not None:
             total = r.price + (r.shipping or 0.0)
-        out.append({
-            **asdict(r),
+        merged = asdict(r)
+        # Detail-page condition is more authoritative than the search-page subtitle
+        # when both are present; fall back to whichever we have.
+        if d.condition_tag:
+            merged["condition_tag"] = d.condition_tag
+        merged.update({
             "total_price": total,
             "item_specifics": d.item_specifics,
             "description": d.description,
         })
+        out.append(merged)
     return out

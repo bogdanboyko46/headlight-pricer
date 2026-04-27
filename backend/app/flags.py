@@ -22,7 +22,13 @@ FLAG_NAMES: list[str] = [
 
 # Hard filters: a comparable listing's flag must equal the user's flag exactly.
 # (If user is unsure — flag is None — we don't apply that hard filter.)
-HARD_FILTER_FLAGS: set[str] = {"lens_cracked", "housing_cracked", "complete_assembly"}
+HARD_FILTER_FLAGS: set[str] = {"lens_cracked", "housing_cracked", "complete_assembly", "oem"}
+
+# OEM is hard-filtered with a stricter rule than the others: when the user asserts
+# oem=True, a listing whose OEM status is unknown is dropped (instead of passed).
+# We don't want to recommend prices off aftermarket comps just because the
+# extractor couldn't confirm OEM-ness from the description.
+STRICT_HARD_FILTER_FLAGS: set[str] = {"oem"}
 
 SOFT_FLAGS: list[str] = [f for f in FLAG_NAMES if f not in HARD_FILTER_FLAGS]
 
@@ -33,7 +39,6 @@ SOFT_WEIGHTS: dict[str, float] = {
     "moisture_inside": 1.5,
     "all_bulbs_working": 1.0,
     "tested": 0.5,
-    "oem": 1.0,
 }
 
 
@@ -68,10 +73,16 @@ def coerce_flags(d: dict | None) -> FlagDict:
 
 
 def hard_filter_matches(user: FlagDict, listing: FlagDict) -> bool:
-    """All known hard-filter flags must match. Unknown on either side = pass."""
+    """All hard-filter flags must match. By default unknown-on-either-side = pass,
+    but flags in STRICT_HARD_FILTER_FLAGS require an explicit listing value when
+    the user has set theirs (unknown listing = drop)."""
     for f in HARD_FILTER_FLAGS:
         u, l = user.get(f), listing.get(f)
-        if u is None or l is None:
+        if u is None:
+            continue
+        if l is None:
+            if f in STRICT_HARD_FILTER_FLAGS:
+                return False
             continue
         if u != l:
             return False

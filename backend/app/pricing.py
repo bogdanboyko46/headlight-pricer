@@ -81,15 +81,34 @@ def tukey_fence(values: list[float]) -> tuple[float, float]:
     return float(q1 - 1.5 * iqr), float(q3 + 1.5 * iqr)
 
 
+# eBay coarse-condition tags that signal a NEW (almost always aftermarket
+# replacement) headlight. We exclude these from the comparable pool entirely:
+# this app prices used-OEM headlights, not new aftermarket assemblies.
+_EXCLUDED_CONDITION_TAGS: set[str] = {
+    "brand new", "new", "new (other)", "new with defects",
+    "new without box", "new other (see details)",
+}
+
+
+def _is_excluded_condition(tag: str | None) -> bool:
+    if not tag:
+        return False
+    return tag.strip().lower() in _EXCLUDED_CONDITION_TAGS
+
+
 def filter_comparables(
     user: FlagDict,
     listings: Iterable[dict],
     *,
     soft_threshold: float = SOFT_SIMILARITY_THRESHOLD,
 ) -> list[dict]:
-    """Apply hard filters then soft-similarity threshold."""
+    """Apply hard filters then soft-similarity threshold. Listings tagged
+    NEW / Brand New are dropped before any flag matching — they're typically
+    aftermarket replacements that don't price like used-OEM comps."""
     out: list[dict] = []
     for l in listings:
+        if _is_excluded_condition(l.get("condition_tag")):
+            continue
         flags = l.get("flags") or {}
         if not hard_filter_matches(user, flags):
             continue
