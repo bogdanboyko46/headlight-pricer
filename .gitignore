@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# uv
+backend/.venv/
+
+# SQLite
+*.db
+*.db-journal
+
+# Env
+.env
+.env.local
+backend/app/.env
+
+# Playwright artifacts
+.playwright-mcp/
+test-results/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+.npm/
+.pnpm-store/
+
+# Editors
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# misc
+*.tmp
+smoke-test.png

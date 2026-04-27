@@ -1,0 +1,15 @@
+[project]
+name = "headlight-pricer"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "anthropic>=0.97.0",
+    "beautifulsoup4>=4.14.3",
+    "fastapi[standard]>=0.136.1",
+    "lxml>=6.1.0",
+    "numpy>=2.4.4",
+    "playwright>=1.58.0",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.46.0",
+]
