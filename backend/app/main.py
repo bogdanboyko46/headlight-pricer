@@ -17,8 +17,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from contextlib import asynccontextmanager
 from typing import Any
+
+# On Windows the default asyncio loop is the Selector loop, which raises
+# NotImplementedError on subprocess_exec — and Playwright needs to spawn
+# Chromium via subprocess_exec. Force the Proactor loop before uvicorn boots.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
